@@ -1,4 +1,3 @@
-//GPT_CODE TRY AND INSPECT THEN BRING IN OTHER ASPECTS!
 import {
   Connection,
   Keypair,
@@ -148,6 +147,8 @@ async function main() {
     console.log("Starting BUY process \n");
     const quoteReq = quoteRequest(inputMint, outputMint, solToLamports(0.01), TransactionType.BUY); // Create the quote request using fixed amount
     const quote = await getQuote(quoteReq);
+    //TODO: IMPLEMENT
+    //const priorityFees = getPriotitizationFess();
     console.log(quote);
     const buyswapObj = await getSwapObj(wallet, quote);
     console.log(buyswapObj);
@@ -159,20 +160,21 @@ async function main() {
     transaction.sign([wallet]);
     const serializedTransaction = Buffer.from(transaction.serialize());
     const latestBlockHash = await connection.getLatestBlockhash();
-    const tx = await transactionSenderAndConfirmationWaiter({
-      connection,
-      serializedTransaction,
-      blockhashWithExpiryBlockHeight: {
-        blockhash: latestBlockHash.blockhash,
-        lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
-      },
-      transactionType: TransactionType.BUY,
-    });
-    if (tx) {
-      console.log(`Transaction successful: https://solscan.io/tx/${tx}`);
-    } else {
-      console.error("Transaction failed or could not be confirmed");
-    }
+    //TODO: UNCOMMENT WHEN TRYING TO SWAP
+    // const tx = await transactionSenderAndConfirmationWaiter({
+    //   connection,
+    //   serializedTransaction,
+    //   blockhashWithExpiryBlockHeight: {
+    //     blockhash: latestBlockHash.blockhash,
+    //     lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+    //   },
+    //   transactionType: TransactionType.BUY,
+    // });
+    // if (tx) {
+    //   console.log(`Transaction successful: https://solscan.io/tx/${tx}`);
+    // } else {
+    //   console.error("Transaction failed or could not be confirmed");
+    // }
 
     //SELL QUOTE
     console.log(`Starting SELL process`);
