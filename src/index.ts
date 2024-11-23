@@ -45,7 +45,7 @@ async function main() {
         outputMint: outputMint,
         amount: amount,
         autoSlippage: true,
-        maxAutoSlippageBps: transcationType === TransactionType.BUY ? 700 : 1000, // Buy =7% or Sell =10%
+        maxAutoSlippageBps: transcationType === TransactionType.BUY ? 700 : 1100, // Buy =7% or Sell =11%
         minimizeSlippage: true,
         onlyDirectRoutes: false,
       } as QuoteGetRequest;
@@ -54,65 +54,6 @@ async function main() {
       throw error;
     }
   };
-
-  const sellQuoteRequest = (inputMint: string, outputMint: string, amount): QuoteGetRequest => {
-    try {
-      return {
-        inputMint: inputMint,
-        outputMint: outputMint,
-        amount: amount,
-        autoSlippage: true,
-        maxAutoSlippageBps: 1000, //10%
-        minimizeSlippage: true,
-        onlyDirectRoutes: false,
-      } as QuoteGetRequest;
-    } catch (error) {
-      console.error("Failed to create quote request:", error);
-      throw error;
-    }
-  };
-
-  // const createSellQuoteRequest = async (inputMint, outputMint, walletPublicKey) => {
-  //   try {
-  //     // Get the balance of the input token (the token we're selling)
-  //     const amountToSell = await getTokenBalance(inputMint, walletPublicKey);
-
-  //     if (amountToSell <= 0) {
-  //       throw new Error("No tokens available to sell.");
-  //     }
-
-  //     // Create the quote request using the balance as the amount to sell
-  //     return {
-  //       inputMint: inputMint,
-  //       outputMint: outputMint,
-  //       amount: amountToSell, // Use the entire balance to sell
-  //       autoSlippage: true, // Enable auto slippage management
-  //       maxAutoSlippageBps: 1000, // Set a higher slippage cap at 10% to prioritize successful sell
-  //       minimizeSlippage: true, // Minimize slippage within the allowable limit
-  //       onlyDirectRoutes: false, // Allow both direct and indirect routes for best liquidity
-  //     } as QuoteGetRequest;
-  //   } catch (error) {
-  //     console.error("Failed to create sell quote request:", error);
-  //     throw error;
-  //   }
-  // };
-
-  // async function getTokenBalance(wallet, tokenMint, connection) {
-  //   try {
-  //     // Derive the associated token address for the wallet and mint
-  //     const tokenAccountAddress = await getAssociatedTokenAddress(new PublicKey(tokenMint), wallet.publicKey);
-
-  //     // Fetch the balance of the derived token account
-  //     const tokenBalanceResponse = await connection.getTokenAccountBalance(tokenAccountAddress);
-  //     const balance = tokenBalanceResponse.value.amount;
-
-  //     console.log(`Token Balance for ${tokenMint}: ${balance}`);
-  //     return balance; // Balance in smallest units (such as lamports for SOL)
-  //   } catch (error) {
-  //     console.error("Failed to get token balance:", error);
-  //     throw error;
-  //   }
-  // }
 
   const getQuote = async (quoteRequest) => {
     try {
