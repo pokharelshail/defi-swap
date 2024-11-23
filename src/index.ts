@@ -30,8 +30,39 @@ async function main() {
   const inputMint = "So11111111111111111111111111111111111111112"; // SOL
   const outputMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"; // USDC
   const slippageBps = "50"; // 0.5% slippage
-
+  const quicknodeEndpoint = process.env.RPC;
   const jupiterApi = createJupiterApiClient({ basePath: process.env.METIS_ENDPOINT });
+
+  // Function to get prioritization fees for a token using QuickNode API
+  async function getPriorityFees(tokenMintAddress) {
+    const myHeaders = new Headers();
+    myHeaders.append("Content-Type", "application/json");
+
+    const raw = JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "qn_estimatePriorityFees",
+      params: {
+        last_n_blocks: 100,
+        account: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        api_version: 2,
+      },
+    });
+
+    const requestOptions: RequestInit = {
+      method: "POST",
+      headers: myHeaders,
+      body: raw,
+      redirect: "follow",
+    };
+    //TODO: ADD ERROR HANDELING
+    console.log("--Priroty Fee--");
+    const response = await fetch(quicknodeEndpoint, requestOptions);
+    const data = await response.json();
+    console.log(data);
+    console.log("-----------------------");
+    return data;
+  }
 
   const quoteRequest = (
     inputMint: string,
@@ -91,7 +122,10 @@ async function main() {
     //TODO: IMPLEMENT
     //const priorityFees = getPriotitizationFess();
     console.log(quote);
+    const buyPriorityFee = await getPriorityFees(inputMint);
+    console.log(`Buy Priority ${JSON.stringify(buyPriorityFee)}`);
     const buyswapObj = await getSwapObj(wallet, quote);
+    console.log("Buy Object swap:");
     console.log(buyswapObj);
 
     // Serialize the transaction
