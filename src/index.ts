@@ -9,9 +9,10 @@ import {
 } from "@solana/web3.js";
 import { TransactionType } from "./types/index.js";
 import dotenv from "dotenv";
-import { solToLamports } from "./helpers/conversions.js";
+import { solToLamports, delay } from "./helpers/conversions.js";
 import { createJupiterApiClient, QuoteGetRequest, QuoteResponse, ResponseError } from "@jup-ag/api";
 import { transactionSenderAndConfirmationWaiter } from "./transactionSender.js"; // Make sure to include the transaction sender
+import { token } from "@project-serum/anchor/dist/cjs/utils/index.js";
 const { getAssociatedTokenAddressSync } = require("@solana/spl-token");
 
 dotenv.config({
@@ -22,16 +23,13 @@ async function main() {
   const connection = new Connection(process.env.RPC, "confirmed");
   const secretKey = Uint8Array.from(JSON.parse(process.env.SECRET_KEY));
   const wallet = Keypair.fromSecretKey(secretKey);
-  //console.log(wallet.publicKey.toBase58());
-
-  // Introducing Ledger for Token Management
-  const riskPercentage = 0.1; // Set risk to 10% of wallet
 
   const inputMint = "So11111111111111111111111111111111111111112"; // SOL
-  const outputMint = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"; // USDC
-  const slippageBps = "50"; // 0.5% slippage
+  const outputMint = "G1FtYFCCRMjCBpUBmG5q8UWuJ5rjDpgZNmmSoDbpump"; // USDC
   const quicknodeEndpoint = process.env.RPC;
   const jupiterApi = createJupiterApiClient({ basePath: process.env.METIS_ENDPOINT });
+
+  //__________________________________________________
 
   // Function to get prioritization fees for a token using QuickNode API
   async function getPriorityFees(tokenMintAddress) {
@@ -44,7 +42,7 @@ async function main() {
       method: "qn_estimatePriorityFees",
       params: {
         last_n_blocks: 100,
-        account: "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4",
+        account: tokenMintAddress,
         api_version: 2,
       },
     });
@@ -60,7 +58,6 @@ async function main() {
     const response = await fetch(quicknodeEndpoint, requestOptions);
     const data = await response.json();
     console.log(data);
-    console.log("-----------------------");
     return data;
   }
 
@@ -101,34 +98,38 @@ async function main() {
     }
   };
 
-  async function getSwapObj(wallet: Keypair, quote: QuoteResponse) {
+  async function getSwapObj(wallet: Keypair, quote: QuoteResponse, priorityFeeMicroLamports) {
+    const priorityFeeLamports = Math.round(priorityFeeMicroLamports / 1_000_000);
     // Get serialized transaction
+    console.log(priorityFeeLamports);
     const swapObj = await jupiterApi.swapPost({
       swapRequest: {
         quoteResponse: quote,
         userPublicKey: wallet.publicKey.toBase58(),
         dynamicComputeUnitLimit: true,
-        prioritizationFeeLamports: "auto",
+        prioritizationFeeLamports: priorityFeeLamports,
       },
     });
     return swapObj;
   }
 
+  //__________________________________________________
+
   try {
     const startTime = performance.now();
     console.log("Starting BUY process \n");
-    const quoteReq = quoteRequest(inputMint, outputMint, solToLamports(0.01), TransactionType.BUY); // Create the quote request using fixed amount
+    0.0097;
+    const quoteReq = quoteRequest(inputMint, outputMint, solToLamports(0.005), TransactionType.BUY); // Create the quote request using fixed amount
     const quote = await getQuote(quoteReq);
     //TODO: IMPLEMENT
     //const priorityFees = getPriotitizationFess();
     console.log(quote);
     const buyPriorityFee = await getPriorityFees(inputMint);
-    console.log(`Buy Priority ${JSON.stringify(buyPriorityFee)}`);
-    const buyswapObj = await getSwapObj(wallet, quote);
+    const buyPrioritizationFeeMicroLamports = buyPriorityFee.result?.per_transaction.low;
+    const buyswapObj = await getSwapObj(wallet, quote, buyPrioritizationFeeMicroLamports);
     console.log("Buy Object swap:");
     console.log(buyswapObj);
 
-    // Serialize the transaction
     const swapTransactionBuf = Buffer.from(buyswapObj.swapTransaction, "base64");
     var transaction = VersionedTransaction.deserialize(swapTransactionBuf);
     // Sign the transaction
@@ -136,21 +137,22 @@ async function main() {
     const serializedTransaction = Buffer.from(transaction.serialize());
     const latestBlockHash = await connection.getLatestBlockhash();
     //TODO: UNCOMMENT WHEN TRYING TO SWAP
-    // const tx = await transactionSenderAndConfirmationWaiter({
-    //   connection,
-    //   serializedTransaction,
-    //   blockhashWithExpiryBlockHeight: {
-    //     blockhash: latestBlockHash.blockhash,
-    //     lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
-    //   },
-    //   transactionType: TransactionType.BUY,
-    // });
-    // if (tx) {
-    //   console.log(`Transaction successful: https://solscan.io/tx/${tx}`);
-    // } else {
-    //   console.error("Transaction failed or could not be confirmed");
-    // }
-
+    const tx = await transactionSenderAndConfirmationWaiter({
+      connection,
+      serializedTransaction,
+      blockhashWithExpiryBlockHeight: {
+        blockhash: latestBlockHash.blockhash,
+        lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+      },
+      transactionType: TransactionType.BUY,
+    });
+    if (tx) {
+      console.log(`Transaction successful: https://solscan.io/tx/${tx}`);
+    } else {
+      console.error("Transaction failed or could not be confirmed");
+    }
+    console.log("wait 3 secs before selling...");
+    await delay(7000);
     //SELL QUOTE
     console.log(`Starting SELL process`);
     const tokenMint = new PublicKey(outputMint);
@@ -159,6 +161,7 @@ async function main() {
       const mintAddy = getAssociatedTokenAddressSync(tokenMint, wallet.publicKey);
       const tokenAccountBalance = await connection.getTokenAccountBalance(mintAddy);
       outputMintBalance = tokenAccountBalance.value.amount;
+      console.log(outputMintBalance);
       console.log(`
         --------------------------------------------------------------------------
         Associated Mint Address: ${mintAddy.toBase58()}
@@ -171,30 +174,33 @@ async function main() {
     if (outputMintBalance) {
       const sellQuoteRequest = quoteRequest(outputMint, inputMint, outputMintBalance, TransactionType.SELL);
       const sellQuote = await getQuote(sellQuoteRequest);
-      const sellswapObj = await getSwapObj(wallet, sellQuote);
+      const sellPriorityFee = await getPriorityFees(outputMint);
+      const sellprioritizationFeeMicroLamports = sellPriorityFee.result?.per_transaction.extreme;
+
+      const sellswapObj = await getSwapObj(wallet, sellQuote, sellprioritizationFeeMicroLamports);
       console.log(sellswapObj);
       // console.log("SELL QUOTE");
       console.log(sellQuote);
-      // const swapTransactionBuf = Buffer.from(sellswapObj.swapTransaction, "base64");
-      // var transaction = VersionedTransaction.deserialize(swapTransactionBuf);
-      // // Sign the transaction
-      // transaction.sign([wallet]);
-      // const serializedTransaction = Buffer.from(transaction.serialize());
-      // const latestBlockHash = await connection.getLatestBlockhash();
-      // const tx = await transactionSenderAndConfirmationWaiter({
-      //   connection,
-      //   serializedTransaction,
-      //   blockhashWithExpiryBlockHeight: {
-      //     blockhash: latestBlockHash.blockhash,
-      //     lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
-      //   },
-      //   transactionType: TransactionType.SELL,
-      // });
-      // if (tx) {
-      //   console.log(`Transaction successful: https://solscan.io/tx/${tx}`);
-      // } else {
-      //   console.error("Transaction failed or could not be confirmed");
-      // }
+      const swapTransactionBuf = Buffer.from(sellswapObj.swapTransaction, "base64");
+      var transaction = VersionedTransaction.deserialize(swapTransactionBuf);
+      // Sign the transaction
+      transaction.sign([wallet]);
+      const serializedTransaction = Buffer.from(transaction.serialize());
+      const latestBlockHash = await connection.getLatestBlockhash();
+      const tx = await transactionSenderAndConfirmationWaiter({
+        connection,
+        serializedTransaction,
+        blockhashWithExpiryBlockHeight: {
+          blockhash: latestBlockHash.blockhash,
+          lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
+        },
+        transactionType: TransactionType.SELL,
+      });
+      if (tx) {
+        console.log(`SELL Transaction successful: https://solscan.io/tx/${tx}`);
+      } else {
+        console.error("SELL Transaction failed or could not be confirmed");
+      }
     }
     const endTime = performance.now();
     console.log(`Total Execution Time: ${endTime - startTime} ms`);
