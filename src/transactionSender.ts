@@ -4,7 +4,7 @@ import {
   TransactionExpiredBlockheightExceededError,
   VersionedTransactionResponse,
 } from "@solana/web3.js";
-import { TransactionType } from "./types";
+import { TransactionType } from "./types/index.js";
 
 type TransactionSenderProps = {
   connection: Connection;
